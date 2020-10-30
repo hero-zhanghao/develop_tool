@@ -51,37 +51,22 @@ public class RedisLockUtils {
     public static <T> Mono<T> lockAndOperation(String key, Object lockKey, Duration timeout, Duration waiting, Supplier<Mono<T>> operation) {
         final Lock obtain = getRedisLockRegistryByKey(key, timeout).obtain(lockKey);
 //                        final Mono<Boolean> lockMono = valueOperations.setIfAbsent(StrUtil.format(GlobalRediskeyConstant.LOCK_KEY, key), 1,timeout);
-        final Mono<T> result = Mono.just(0)
-                .flatMap(ignore -> {
+        return Mono.just(0)
+                .doFirst(() -> {
                     try {
-                        if (obtain.tryLock(waiting.toMillis(), TimeUnit.MILLISECONDS)) {
-                            final Long startTime = System.currentTimeMillis();
-                            log.info("Got the distributed lock and executing , key  = {} , lockKey = {} , time = {} ", key, lockKey, LocalDateTime.now());
-                            return operation.get().doFinally(o -> obtain.unlock());
-                        } else {
+                        log.info("Attempt to acquire a lock , key  = {} , lockKey = {} , time = {} ",key, lockKey, LocalDateTime.now());
+                        if (!obtain.tryLock(waiting.toMillis(), TimeUnit.MILLISECONDS)) {
                             log.info("The distributed lock was not obtained and execution is over, key = {} , lockKey = {}, time = {} ", key, lockKey, LocalDateTime.now());
-                            return Mono.error(new RedisUpdateException());
+                            throw  new RedisUpdateException();
                         }
                     } catch (InterruptedException e) {
                         log.info("The distributed lock was not obtained and execution is over, key = {} , lockKey = {} ,  time = {} ", key, lockKey, LocalDateTime.now());
-                        return Mono.error(new RedisUpdateException());
+                        throw  new RedisUpdateException();
                     }
-                });
-        return result;
-//                        return lockMono.flatMap(b -> {
-//                            if (b){
-//                                return operation.get();
-//                            }else{
-//                                final Integer retryNumber = context.getOrDefault(RETRY_NUMBER, 1);
-//                                if (retryNumber <= retryCount){
-//                                    context.put(RETRY_NUMBER,retryNumber+1);
-//                                    return Mono.delay(waitingRetry)
-//                                            .then(lockAndOperation(key,timeout,retryCount,waitingRetry,operation));
-//                                }
-//                                return Mono.error(new RedisUpdateException());
-//                            }
-//                        });
-//                    .flatMap(t -> valueOperations.delete(StrUtil.format(GlobalRediskeyConstant.LOCK_KEY, key)).map(b -> t));
+                })
+                .doFinally(ignore -> obtain.unlock())
+                .flatMap(ignore -> operation.get())
+                .subscribeOn(Schedulers.elastic());
 }
 
 
