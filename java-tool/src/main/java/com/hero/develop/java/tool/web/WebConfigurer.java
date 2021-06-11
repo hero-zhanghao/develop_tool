@@ -42,7 +42,12 @@ public class WebConfigurer implements WebFluxConfigurer {
         timeModule.addDeserializer(LocalDate.class, new LocalDateDeserializer(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         timeModule.addDeserializer(LocalTime.class, new LocalTimeDeserializer(DateTimeFormatter.ofPattern("HH:mm:ss")));
 //        mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
-        mapper.registerModule(timeModule).registerModule(new ParameterNamesModule()).registerModules(ObjectMapper.findModules());
+        SimpleModule bigDecimalModule = new SimpleModule();
+        bigDecimalModule.addDeserializer(BigDecimal.class,new NumberDeserializers.BigDecimalDeserializer());
+        bigDecimalModule.addSerializer(BigDecimal.class,new BigDecimalSerializer());
+
+        mapper.registerModule(timeModule).registerModule(new ParameterNamesModule()).registerModules(bigDecimalModule)
+                .registerModules(ObjectMapper.findModules());
         return mapper;
     }
 
